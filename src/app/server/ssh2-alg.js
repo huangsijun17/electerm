@@ -2,10 +2,28 @@
  * all supported ssh2 algorithms config
  */
 const nodeCrypto = require('crypto')
+const oldCreateVerify = nodeCrypto.createVerify
 const browserDH = require('diffie-hellman/browser')
 
 nodeCrypto.createDiffieHellmanGroup = browserDH.createDiffieHellmanGroup
 nodeCrypto.createDiffieHellman = browserDH.createDiffieHellman
+
+// Override createVerify
+nodeCrypto.createVerify = function (algorithm) {
+  console.log('createVerify', algorithm)
+  try {
+    return oldCreateVerify(algorithm)
+  } catch (e) {
+    const forge = require('node-forge')
+    const verifier = forge.md[algorithm.toLowerCase()].create()
+    return {
+      update: (data) => verifier.update(data),
+      verify: (publicKey, signature) => {
+        return forge.pki.verify(publicKey, signature, verifier.digest())
+      }
+    }
+  }
+}
 
 module.exports = {
   kex: [
@@ -47,6 +65,7 @@ module.exports = {
     'arcfour'
   ],
   serverHostKey: [
+    'ssh-rsa',
     'ssh-ed25519',
     'ecdsa-sha2-nistp256',
     'ecdsa-sha2-nistp384',
